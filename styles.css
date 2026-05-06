@@ -507,8 +507,27 @@ input, select, textarea { font-family: inherit; }
 
 /* ============================================================ RECORRENTES / CATEGORIAS */
 
-.recorrentes-list,
+.recorrentes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
 .categorias-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.cat-group-head {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 15px;
+  margin: 0 0 -8px;
+  text-transform: lowercase;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.cat-group {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
@@ -522,10 +541,29 @@ input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color .15s, transform .08s;
+  transition: border-color .15s, transform .08s, box-shadow .15s;
 }
 .list-card:hover { border-color: var(--accent); }
 .list-card.inactive { opacity: 0.5; }
+
+.list-card.draggable { cursor: grab; }
+.list-card.draggable:active { cursor: grabbing; }
+.list-card.draggable .lc-actions button { cursor: pointer; }
+
+/* SortableJS classes */
+.sortable-ghost {
+  opacity: 0.35;
+  background: var(--surface-2);
+  border-style: dashed;
+}
+.sortable-chosen {
+  box-shadow: 0 8px 20px -8px rgba(26, 25, 22, 0.25);
+  border-color: var(--accent);
+  z-index: 10;
+}
+.sortable-drag {
+  cursor: grabbing;
+}
 
 .list-card .lc-top {
   display: flex;

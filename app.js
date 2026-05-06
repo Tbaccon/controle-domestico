@@ -219,6 +219,7 @@ function setupRealtime() {
       if (state.view === 'comparar') loadCompararData();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'categorias' }, async () => {
+      if (state.savingCategoriaOrder) return;
       await loadCategorias();
       if (state.view === 'mes') renderMes();
       if (state.view === 'categorias') renderCategorias();
@@ -640,18 +641,22 @@ function renderCategorias() {
   for (const tipo of ['fixa', 'cartao', 'pontual']) {
     const items = state.categorias.filter(c => c.tipo === tipo);
     if (items.length === 0) continue;
-    root.append(el('h3', {
-      style: { gridColumn: '1 / -1', fontFamily: 'var(--font-display)', fontWeight: '500', fontSize: '15px', margin: '12px 0 0', textTransform: 'lowercase', color: 'var(--muted)' }
-    }, tipo === 'fixa' ? 'fixas' : tipo === 'cartao' ? 'cartões' : 'pontuais'));
-    for (const c of items) {
-      root.append(buildCategoriaCard(c));
-    }
+
+    root.append(el('h3', { class: 'cat-group-head' },
+      tipo === 'fixa' ? 'fixas' : tipo === 'cartao' ? 'cartões' : 'pontuais'));
+
+    const group = el('div', { class: 'cat-group', dataset: { tipo } });
+    for (const c of items) group.append(buildCategoriaCard(c));
+    root.append(group);
+
+    initCategoriasSortable(group);
   }
 }
 
 function buildCategoriaCard(c) {
   return el('div', {
-    class: 'list-card' + (c.ativa ? '' : ' inactive'),
+    class: 'list-card draggable' + (c.ativa ? '' : ' inactive'),
+    dataset: { catId: c.id },
   }, [
     el('div', { class: 'lc-top' }, [
       el('span', { class: 'lc-color', style: { background: c.cor } }),
@@ -671,23 +676,65 @@ function buildCategoriaCard(c) {
   ]);
 }
 
+function initCategoriasSortable(container) {
+  Sortable.create(container, {
+    animation: 180,
+    filter: 'button',
+    preventOnFilter: true,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    delay: 120,
+    delayOnTouchOnly: true,
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex) return;
+      const cards = Array.from(container.children);
+      const updates = cards.map((card, i) => ({
+        id: card.dataset.catId,
+        ordem: (i + 1) * 10,
+      }));
+      state.savingCategoriaOrder = true;
+      try {
+        await Promise.all(
+          updates.map(u =>
+            sb.from('categorias').update({ ordem: u.ordem }).eq('id', u.id)
+          )
+        );
+        toast('Ordem salva', 'ok');
+        await loadCategorias();
+      } catch (err) {
+        toast('Erro ao salvar ordem: ' + err.message, 'error');
+        await loadCategorias();
+        renderCategorias();
+      } finally {
+        state.savingCategoriaOrder = false;
+      }
+    },
+  });
+}
+
 function openCategoriaModal(seed) {
   const isEdit = !!seed.id;
   const form = el('form', {
     onsubmit: async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
+      const tipo = f.get('tipo');
       const payload = {
         nome: f.get('nome').trim().toLowerCase(),
-        tipo: f.get('tipo'),
+        tipo,
         cor: f.get('cor'),
-        ordem: Number(f.get('ordem') || 100),
       };
       try {
         if (isEdit) {
           const { error } = await sb.from('categorias').update(payload).eq('id', seed.id);
           if (error) throw error;
         } else {
+          // Nova: vai pro fim do grupo do seu tipo (drag pra reordenar)
+          const sameType = state.categorias.filter(c => c.tipo === tipo);
+          payload.ordem = sameType.length === 0
+            ? 10
+            : Math.max(...sameType.map(c => c.ordem || 0)) + 10;
           const { error } = await sb.from('categorias').insert(payload);
           if (error) throw error;
         }
@@ -702,7 +749,7 @@ function openCategoriaModal(seed) {
   }, [
     el('label', {}, [el('span', {}, 'Nome'),
       el('input', { type: 'text', name: 'nome', value: seed.nome || '', required: true })]),
-    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' } }, [
+    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' } }, [
       el('label', {}, [el('span', {}, 'Tipo'),
         (() => {
           const s = el('select', { name: 'tipo', required: true });
@@ -711,8 +758,6 @@ function openCategoriaModal(seed) {
           });
           return s;
         })()]),
-      el('label', {}, [el('span', {}, 'Ordem'),
-        el('input', { type: 'number', name: 'ordem', value: seed.ordem || 100 })]),
       el('label', {}, [el('span', {}, 'Cor'),
         el('input', { type: 'color', name: 'cor', value: seed.cor || '#7c8aa8', style: { padding: '2px', height: '38px' } })]),
     ]),
