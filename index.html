@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#faf7f1">
+  <title>Controle Doméstico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================================================ LOGIN -->
+<section id="login-screen" class="login-screen" hidden>
+  <div class="login-card">
+    <h1 class="brand">Controle <em>Doméstico</em></h1>
+    <p class="brand-sub">Acesso restrito.</p>
+
+    <form id="login-form" class="login-form" autocomplete="on">
+      <label>
+        <span>Email</span>
+        <input type="email" name="email" required autocomplete="username" inputmode="email">
+      </label>
+      <label>
+        <span>Senha</span>
+        <input type="password" name="password" required autocomplete="current-password" minlength="6">
+      </label>
+      <button type="submit" class="btn-primary">Entrar</button>
+      <p id="login-error" class="form-error" hidden></p>
+      <p class="login-hint">Não tem acesso? Peça pra Thiago te enviar um convite via Supabase.</p>
+    </form>
+  </div>
+</section>
+
+<!-- ============================================================ APP SHELL -->
+<div id="app" class="app-shell" hidden>
+
+  <header class="app-header">
+    <div class="brand-mark">
+      <span class="brand-name">Controle <em>Doméstico</em></span>
+    </div>
+    <nav class="app-nav" role="tablist">
+      <button class="nav-btn active" data-view="mes">Mês</button>
+      <button class="nav-btn"        data-view="recorrentes">Recorrentes</button>
+      <button class="nav-btn"        data-view="categorias">Categorias</button>
+      <button class="nav-btn"        data-view="comparar">Comparar</button>
+      <button class="nav-btn"        data-view="config">Config</button>
+    </nav>
+    <div class="user-chip">
+      <span id="user-name" class="user-name">…</span>
+      <button id="btn-logout" class="btn-link" title="Sair">sair</button>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ----------------------------------------------- VIEW: MÊS -->
+    <section id="view-mes" class="view active">
+      <div class="month-bar">
+        <button id="month-prev" class="month-nav" aria-label="Mês anterior">‹</button>
+        <h2 id="month-title" class="month-title">…</h2>
+        <button id="month-next" class="month-nav" aria-label="Próximo mês">›</button>
+        <input id="month-input" type="month" class="month-input">
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card"><span class="sc-label">entrada</span><span id="sum-entrada" class="sc-value">—</span></div>
+        <div class="summary-card"><span class="sc-label">fixas</span><span id="sum-fixas" class="sc-value">—</span></div>
+        <div class="summary-card hi"><span class="sc-label">sobra</span><span id="sum-sobra" class="sc-value">—</span></div>
+        <div class="summary-card"><span class="sc-label">cartões + pontuais</span><span id="sum-cartao" class="sc-value">—</span></div>
+        <div class="summary-card hi-final"><span class="sc-label">FINAL</span><span id="sum-final" class="sc-value">—</span></div>
+      </div>
+
+      <div class="ledger">
+        <div class="ledger-col">
+          <div class="ledger-head">
+            <h3>Fixas</h3>
+            <button class="add-row" data-tipo="fixa">+ adicionar</button>
+          </div>
+          <div id="rows-fixas" class="rows"></div>
+          <div id="rec-pendentes-fixa" class="rec-pendentes"></div>
+        </div>
+        <div class="ledger-col">
+          <div class="ledger-head">
+            <h3>Cartões</h3>
+            <button class="add-row" data-tipo="cartao">+ adicionar</button>
+          </div>
+          <div id="rows-cartao" class="rows"></div>
+          <div id="rec-pendentes-cartao" class="rec-pendentes"></div>
+        </div>
+      </div>
+
+      <div class="entrada-extra">
+        <div class="ledger-head">
+          <h3>Entradas</h3>
+          <button class="add-row" data-tipo="entrada">+ adicionar</button>
+        </div>
+        <div id="rows-entrada" class="rows"></div>
+      </div>
+
+      <div id="pontuais-section" class="pontuais-section" hidden>
+        <div class="ledger-head">
+          <h3>Pontuais</h3>
+          <button class="add-row" data-tipo="pontual">+ adicionar</button>
+        </div>
+        <div id="rows-pontual" class="rows"></div>
+      </div>
+
+      <button class="add-row outline-row" data-tipo="pontual" id="btn-add-pontual">+ lançamento pontual</button>
+    </section>
+
+    <!-- ----------------------------------------------- VIEW: RECORRENTES -->
+    <section id="view-recorrentes" class="view">
+      <div class="view-head">
+        <h2>Recorrentes</h2>
+        <p class="view-sub">Itens que se repetem todo mês. Aparecem como "pendentes" na tela do mês até você confirmar o valor.</p>
+        <button id="btn-add-recorrente" class="btn-primary">+ nova recorrente</button>
+      </div>
+      <div id="recorrentes-list" class="recorrentes-list"></div>
+    </section>
+
+    <!-- ----------------------------------------------- VIEW: CATEGORIAS -->
+    <section id="view-categorias" class="view">
+      <div class="view-head">
+        <h2>Categorias</h2>
+        <p class="view-sub">Edite, desative ou crie novas categorias.</p>
+        <button id="btn-add-categoria" class="btn-primary">+ nova categoria</button>
+      </div>
+      <div id="categorias-list" class="categorias-list"></div>
+    </section>
+
+    <!-- ----------------------------------------------- VIEW: COMPARAR -->
+    <section id="view-comparar" class="view">
+      <div class="view-head">
+        <h2>Comparativo</h2>
+        <p class="view-sub">Últimos 12 meses (ou os disponíveis).</p>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart-meses"></canvas>
+      </div>
+      <div id="tabela-comparativo" class="tabela-comparativo"></div>
+    </section>
+
+    <!-- ----------------------------------------------- VIEW: CONFIG -->
+    <section id="view-config" class="view">
+      <div class="view-head">
+        <h2>Configurações</h2>
+      </div>
+      <div class="config-grid">
+        <div class="config-card">
+          <h3>Backup completo (JSON)</h3>
+          <p>Baixa tudo (categorias, lançamentos, recorrentes) num arquivo. Guarde periodicamente.</p>
+          <button id="btn-export" class="btn-secondary">exportar JSON</button>
+        </div>
+        <div class="config-card">
+          <h3>Restaurar de backup</h3>
+          <p>Atenção: substitui os dados atuais pelos do arquivo.</p>
+          <input type="file" id="import-file" accept="application/json" hidden>
+          <button id="btn-import" class="btn-secondary">importar JSON</button>
+        </div>
+        <div class="config-card">
+          <h3>Sessão</h3>
+          <p>Logado como <strong id="config-user">…</strong></p>
+          <button id="btn-logout-2" class="btn-link">sair da conta</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================================================ MODAL -->
+<div id="modal-host" class="modal-host" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal" role="dialog">
+    <header class="modal-head">
+      <h3 id="modal-title">…</h3>
+      <button class="modal-close" id="modal-close" aria-label="Fechar">×</button>
+    </header>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ============================================================ TOAST -->
+<div id="toast" class="toast" hidden></div>
+
+<!-- ============================================================ SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
