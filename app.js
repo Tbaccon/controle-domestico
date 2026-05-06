@@ -61,6 +61,27 @@ function parseValor(s) {
   return parseFloat(cleaned);
 }
 
+function capitalizeFirst(s) {
+  s = (s || '').trim();
+  return s ? s[0].toLocaleUpperCase('pt-BR') + s.slice(1) : s;
+}
+
+// Paleta de cores temáticas. Ordem pensada pra ficar coerente visualmente.
+const PALETA_CORES = [
+  '#7c8aa8', // azul-acinzentado (moradia)
+  '#5a8a8c', // ciano (comunicação)
+  '#6b8e6b', // musgo (cuidado/saúde)
+  '#5a7a5e', // verde escuro
+  '#c89a4a', // âmbar (utilidades)
+  '#b88a3a', // mostarda
+  '#a8755e', // terracota (fiscal)
+  '#a85a4a', // ferrugem
+  '#9c6b8e', // rosa-fumê (cartões)
+  '#7a6a8a', // lavanda escuro
+  '#8a8a8a', // cinza neutro
+  '#3d3a35', // grafite
+];
+
 function toast(msg, kind = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -272,6 +293,34 @@ function renderMes() {
 
   // Recorrentes pendentes (existem mas ainda não foram lançadas neste mês)
   renderRecorrentesPendentes();
+
+  // Aviso de pendentes (lançamentos cadastrados mas com status=pendente)
+  renderPendentesAviso();
+}
+
+function renderPendentesAviso() {
+  const aviso = $('#aviso-pendentes');
+  if (!aviso) return;
+  const pendentes = state.lancamentos.filter(l => l.status === 'pendente' && l.tipo !== 'entrada');
+  if (pendentes.length === 0) {
+    aviso.hidden = true;
+    return;
+  }
+  const total = sum(pendentes);
+  const hoje = new Date().toISOString().slice(0, 10);
+  const atrasadas = pendentes.filter(l => l.data_vencimento && l.data_vencimento < hoje).length;
+  aviso.hidden = false;
+  aviso.innerHTML = '';
+  aviso.append(
+    el('span', { class: 'aviso-icon' }, '◷'),
+    el('span', { class: 'aviso-text' }, [
+      el('strong', {}, `${pendentes.length} ${pendentes.length === 1 ? 'conta pendente' : 'contas pendentes'}`),
+      ` · ${fmtBRL(total)}`,
+      atrasadas > 0
+        ? el('span', { class: 'aviso-atraso' }, ` · ${atrasadas} ${atrasadas === 1 ? 'em atraso' : 'em atraso'}`)
+        : null,
+    ]),
+  );
 }
 
 function setSum(sel, value, klass = '') {
@@ -282,6 +331,18 @@ function setSum(sel, value, klass = '') {
 
 function sum(arr) {
   return arr.reduce((acc, l) => acc + Number(l.valor || 0), 0);
+}
+
+function isAtrasada(lanc) {
+  if (lanc.status !== 'pendente' || !lanc.data_vencimento) return false;
+  const hoje = new Date().toISOString().slice(0, 10);
+  return lanc.data_vencimento < hoje;
+}
+
+function fmtDataBR(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}`;
 }
 
 function renderRowGroup(selector, items) {
@@ -295,16 +356,44 @@ function renderRowGroup(selector, items) {
     const cor = lanc.categoria?.cor || '#a39c8e';
     const nome = lanc.tipo === 'entrada' ? (lanc.descricao || 'entrada') : (lanc.categoria?.nome || lanc.descricao || '—');
     const desc = (lanc.tipo !== 'entrada' && lanc.descricao) ? lanc.descricao : '';
+    const pendente = lanc.status === 'pendente';
+    const atrasada = isAtrasada(lanc);
+    const venc = lanc.data_vencimento;
+
+    const labelChildren = [nome];
+    if (desc) labelChildren.push(el('span', { class: 'row-desc' }, '· ' + desc));
+    if (pendente && venc) {
+      labelChildren.push(el('span', { class: 'row-venc' + (atrasada ? ' atrasada' : '') },
+        atrasada ? `venceu ${fmtDataBR(venc)}` : `vence ${fmtDataBR(venc)}`));
+    }
+
+    const valueChildren = [fmtBRL(Number(lanc.valor))];
+    if (pendente) {
+      valueChildren.unshift(
+        el('button', {
+          class: 'row-pay-btn',
+          title: 'marcar como pago hoje',
+          onclick: async (e) => {
+            e.stopPropagation();
+            const today = new Date().toISOString().slice(0, 10);
+            const { error } = await sb.from('lancamentos')
+              .update({ status: 'pago', data: today })
+              .eq('id', lanc.id);
+            if (error) { toast('Erro: ' + error.message, 'error'); return; }
+            toast('Marcado como pago', 'ok');
+            loadMes();
+          },
+        }, '✓')
+      );
+    }
+
     const row = el('div', {
-      class: 'row-item ' + lanc.tipo,
+      class: 'row-item ' + lanc.tipo + (pendente ? ' pendente' : '') + (atrasada ? ' atrasada' : ''),
       onclick: () => openLancamentoModal(lanc),
     }, [
       el('span', { class: 'row-color', style: { background: cor } }),
-      el('div', { class: 'row-label' }, [
-        nome,
-        desc ? el('span', { class: 'row-desc' }, '· ' + desc) : null,
-      ]),
-      el('span', { class: 'row-value' }, fmtBRL(Number(lanc.valor))),
+      el('div', { class: 'row-label' }, labelChildren),
+      el('span', { class: 'row-value' }, valueChildren),
     ]);
     root.append(row);
   }
@@ -372,6 +461,8 @@ document.addEventListener('keydown', (e) => {
 function openLancamentoModal(seed) {
   const isEdit = !!seed.id;
   const tipo = seed.tipo || 'fixa';
+  const initialStatus = seed.status || 'pago';
+  let currentStatus = initialStatus;
 
   const tipoTabs = el('div', { class: 'tipo-tabs' });
   const tipos = ['entrada', 'fixa', 'cartao', 'pontual'];
@@ -386,6 +477,9 @@ function openLancamentoModal(seed) {
         currentTipo = t;
         $$('.tipo-tabs button', tipoTabs).forEach(x => x.classList.toggle('active', x.dataset.t === t));
         renderCategoriaSelect(catSelect, t, seed.categoria_id);
+        // Entrada não tem conceito de pendente
+        statusWrap.hidden = (t === 'entrada');
+        if (t === 'entrada') currentStatus = 'pago';
       },
       dataset: { t },
     }, tipoLabels[t]);
@@ -394,6 +488,24 @@ function openLancamentoModal(seed) {
 
   const catSelect = el('select', { name: 'categoria_id' });
   renderCategoriaSelect(catSelect, currentTipo, seed.categoria_id);
+
+  // Toggle de status (Pago / Pendente)
+  const statusTabs = el('div', { class: 'tipo-tabs status-tabs' });
+  ['pago', 'pendente'].forEach(s => {
+    const b = el('button', {
+      type: 'button',
+      class: s === currentStatus ? 'active' : '',
+      onclick: () => {
+        currentStatus = s;
+        $$('.status-tabs button', statusTabs).forEach(x =>
+          x.classList.toggle('active', x.dataset.s === s));
+      },
+      dataset: { s },
+    }, s === 'pago' ? '✓ Pago' : '◷ Pendente');
+    statusTabs.append(b);
+  });
+  const statusWrap = el('label', {}, [el('span', {}, 'Situação'), statusTabs]);
+  statusWrap.hidden = (currentTipo === 'entrada');
 
   const valorInput = el('input', {
     type: 'text',
@@ -417,6 +529,12 @@ function openLancamentoModal(seed) {
     value: seed.data || '',
   });
 
+  const vencInput = el('input', {
+    type: 'date',
+    name: 'data_vencimento',
+    value: seed.data_vencimento || '',
+  });
+
   const mesInput = el('input', {
     type: 'month',
     name: 'mes_referencia',
@@ -434,7 +552,9 @@ function openLancamentoModal(seed) {
       const payload = {
         mes_referencia: f.get('mes_referencia') + '-01',
         data: f.get('data') || null,
+        data_vencimento: f.get('data_vencimento') || null,
         tipo: currentTipo,
+        status: currentTipo === 'entrada' ? 'pago' : currentStatus,
         categoria_id: currentTipo === 'entrada' ? null : (f.get('categoria_id') || null),
         descricao: f.get('descricao') || null,
         valor,
@@ -451,7 +571,7 @@ function openLancamentoModal(seed) {
         } else {
           const { error } = await sb.from('lancamentos').insert(payload);
           if (error) throw error;
-          toast('Lançado', 'ok');
+          toast(currentStatus === 'pendente' ? 'Cadastrado como pendente' : 'Lançado', 'ok');
         }
         closeModal();
         loadMes();
@@ -461,13 +581,15 @@ function openLancamentoModal(seed) {
     }
   }, [
     el('label', {}, [el('span', {}, 'Tipo'), tipoTabs]),
+    statusWrap,
     el('label', {}, [el('span', {}, 'Categoria'), catSelect]),
     el('label', {}, [el('span', {}, 'Valor'), valorInput]),
     el('label', {}, [el('span', {}, 'Descrição'), descInput]),
     el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' } }, [
       el('label', {}, [el('span', {}, 'Mês de referência'), mesInput]),
-      el('label', {}, [el('span', {}, 'Data'), dataInput]),
+      el('label', {}, [el('span', {}, 'Vencimento'), vencInput]),
     ]),
+    el('label', {}, [el('span', {}, 'Data de pagamento'), dataInput]),
     el('div', { class: 'modal-actions' }, [
       isEdit ? el('button', {
         type: 'button',
@@ -715,13 +837,58 @@ function initCategoriasSortable(container) {
 
 function openCategoriaModal(seed) {
   const isEdit = !!seed.id;
+  let corAtual = seed.cor || PALETA_CORES[0];
+
+  // Picker de cores: paleta de swatches + botão pra cor custom
+  const palette = el('div', { class: 'color-palette' });
+  const corHidden = el('input', { type: 'hidden', name: 'cor', value: corAtual });
+
+  function rebuildPalette() {
+    palette.innerHTML = '';
+    // Inclui a cor atual na paleta se for custom (fora das presets)
+    const cores = PALETA_CORES.includes(corAtual)
+      ? PALETA_CORES
+      : [...PALETA_CORES, corAtual];
+    for (const c of cores) {
+      const swatch = el('button', {
+        type: 'button',
+        class: 'cor-swatch' + (c === corAtual ? ' selected' : ''),
+        style: { background: c },
+        title: c,
+        onclick: () => {
+          corAtual = c;
+          corHidden.value = c;
+          rebuildPalette();
+        },
+      });
+      palette.append(swatch);
+    }
+    // Botão de cor custom
+    const customInput = el('input', {
+      type: 'color',
+      class: 'cor-custom-input',
+      value: corAtual,
+      oninput: (e) => {
+        corAtual = e.target.value;
+        corHidden.value = corAtual;
+        rebuildPalette();
+      },
+    });
+    const customBtn = el('label', {
+      class: 'cor-swatch cor-swatch-custom',
+      title: 'outra cor',
+    }, [customInput, '+']);
+    palette.append(customBtn);
+  }
+  rebuildPalette();
+
   const form = el('form', {
     onsubmit: async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
       const tipo = f.get('tipo');
       const payload = {
-        nome: f.get('nome').trim().toLowerCase(),
+        nome: capitalizeFirst(f.get('nome')),
         tipo,
         cor: f.get('cor'),
       };
@@ -749,18 +916,15 @@ function openCategoriaModal(seed) {
   }, [
     el('label', {}, [el('span', {}, 'Nome'),
       el('input', { type: 'text', name: 'nome', value: seed.nome || '', required: true })]),
-    el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' } }, [
-      el('label', {}, [el('span', {}, 'Tipo'),
-        (() => {
-          const s = el('select', { name: 'tipo', required: true });
-          [['fixa', 'Fixa'], ['cartao', 'Cartão'], ['pontual', 'Pontual']].forEach(([v, l]) => {
-            s.append(el('option', { value: v, selected: v === seed.tipo }, l));
-          });
-          return s;
-        })()]),
-      el('label', {}, [el('span', {}, 'Cor'),
-        el('input', { type: 'color', name: 'cor', value: seed.cor || '#7c8aa8', style: { padding: '2px', height: '38px' } })]),
-    ]),
+    el('label', {}, [el('span', {}, 'Tipo'),
+      (() => {
+        const s = el('select', { name: 'tipo', required: true });
+        [['fixa', 'Fixa'], ['cartao', 'Cartão'], ['pontual', 'Pontual']].forEach(([v, l]) => {
+          s.append(el('option', { value: v, selected: v === seed.tipo }, l));
+        });
+        return s;
+      })()]),
+    el('label', {}, [el('span', {}, 'Cor'), palette, corHidden]),
     el('div', { class: 'modal-actions' }, [
       isEdit ? el('button', {
         type: 'button',

@@ -701,6 +701,143 @@ input, select, textarea { font-family: inherit; }
   background: rgba(26, 25, 22, 0.4);
   backdrop-filter: blur(2px);
 }
+
+/* color palette picker */
+.color-palette {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+}
+.cor-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.cor-swatch:hover {
+  transform: scale(1.08);
+}
+.cor-swatch.selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--ink);
+}
+.cor-swatch-custom {
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.cor-swatch-custom:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cor-custom-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* aviso de pendentes */
+.aviso-pendentes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: -8px 0 24px;
+  background: rgba(184, 138, 58, 0.08);
+  border: 1px solid rgba(184, 138, 58, 0.25);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.aviso-pendentes .aviso-icon {
+  font-size: 16px;
+  color: var(--warn);
+}
+.aviso-pendentes strong {
+  font-weight: 500;
+  color: var(--ink);
+}
+.aviso-pendentes .aviso-atraso {
+  color: var(--negative);
+  font-weight: 500;
+}
+
+/* status pendente nas rows */
+.row-item.pendente {
+  background: rgba(184, 138, 58, 0.04);
+}
+.row-item.pendente .row-color {
+  background: transparent !important;
+  border: 1.5px dashed var(--warn);
+}
+.row-item.pendente .row-value {
+  color: var(--warn);
+}
+.row-item.atrasada {
+  background: rgba(168, 90, 74, 0.06);
+}
+.row-item.atrasada .row-color {
+  border-color: var(--negative);
+}
+.row-item.atrasada .row-value {
+  color: var(--negative);
+  font-weight: 600;
+}
+.row-venc {
+  color: var(--warn);
+  font-size: 11px;
+  margin-left: 6px;
+  font-weight: 500;
+}
+.row-venc.atrasada {
+  color: var(--negative);
+}
+
+/* botão "marcar como pago" inline */
+.row-pay-btn {
+  background: var(--positive);
+  color: #fff;
+  border: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 12px;
+  margin-right: 8px;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  transition: transform .1s, background .15s;
+  vertical-align: middle;
+}
+.row-pay-btn:hover {
+  background: #4a6a4e;
+  transform: scale(1.1);
+}
+
+/* status tabs (pago/pendente) */
+.status-tabs button[data-s="pago"].active {
+  background: var(--positive);
+  color: var(--bg);
+}
+.status-tabs button[data-s="pendente"].active {
+  background: var(--warn);
+  color: var(--bg);
+}
+
 .modal {
   position: relative;
   background: var(--bg);
